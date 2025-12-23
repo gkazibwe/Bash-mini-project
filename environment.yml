@@ -1,0 +1,15 @@
+name: variant_analysis_env
+channels:
+  - bioconda
+  - conda-forge
+  - defaults
+dependencies:
+  - sra-tools        # For downloading FASTQ files (fastq-dump)
+  - fastqc           # For quality control
+  - multiqc          # For merging QC reports
+  - bwa              # For genome alignment
+  - samtools         # For BAM manipulation
+  - bcftools         # For variant calling and VCF manipulation
+  - snpeff           # For variant annotation
+  - wget             # For downloading reference files
+  - pigz             # For parallel compression (speeds up handling)
