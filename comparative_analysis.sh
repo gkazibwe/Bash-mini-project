@@ -19,14 +19,15 @@
 # (Change these variables to analyze different strains/organisms)
 
 # Sample Accessions (SRA Run IDs)
-STRAIN_1_ID="SRR1770413" # E. coli Strain A (Example)
-STRAIN_2_ID="SRR1770414" # E. coli Strain B (Example)
+STRAIN_1_ID="SRR36143512" # Herpes simplex Strain A
+STRAIN_2_ID="SRR23265797" # Herpes simplex Strain B
 SAMPLES=($STRAIN_1_ID $STRAIN_2_ID)
 
-# Reference Genome (E. coli K-12 MG1655)
-REF_URL="https://ftp.ncbi.nlm.nih.gov/genomes/all/GCF/000/005/845/GCF_000005845.2_ASM584v2/GCF_000005845.2_ASM584v2_genomic.fna.gz"
-REF_NAME="ecoli_k12_ref"
-SNPEFF_DB="Escherichia_coli_str_k_12_substr_mg1655" # Database name for snpEff
+# Reference Genome (Human herpesvirus 1 strain 17)
+REF_URL="https://ftp.ncbi.nlm.nih.gov/genomes/all/GCF/000/859/985/GCF_000859985.2_ViralProj15217/GCF_000859985.2_ViralProj15217_genomic.fna.gz"
+REF_NAME="Human_herpesvirus_1_strain_17"
+SNPEFF_DB="HSV1_strain17" # Database name for snpEff
+SNPEFF_CONFIG="$CONDA_PREFIX/share/snpeff-*/snpEff.config"
 
 # CPU Threads
 THREADS=8
@@ -83,6 +84,17 @@ if ! check_step "DOWNLOAD_REF"; then
 fi
 
 # ==============================================================================
+# STEP 1b: DOWNLOAD GENE ANNOTATION (GFF)
+# ==============================================================================
+if ! check_step "DOWNLOAD_GFF"; then
+    log "Downloading HSV-1 gene annotation (GFF)..."
+    wget -O "$DIR_REF/${REF_NAME}.gff.gz" \
+        "https://ftp.ncbi.nlm.nih.gov/genomes/all/GCF/000/859/985/GCF_000859985.2_ViralProj15217/GCF_000859985.2_ViralProj15217_genomic.gff.gz"
+    gunzip -f "$DIR_REF/${REF_NAME}.gff.gz"
+    mark_step "DOWNLOAD_GFF"
+fi
+
+# ==============================================================================
 # STEP 2: DOWNLOAD RAW READS (SRA)
 # ==============================================================================
 if ! check_step "DOWNLOAD_READS"; then
@@ -90,9 +102,30 @@ if ! check_step "DOWNLOAD_READS"; then
     for sample in "${SAMPLES[@]}"; do
         log "Downloading $sample..."
         # fastq-dump splits files into forward/reverse (_1.fastq, _2.fastq)
-        fastq-dump --split-files --gzip --outdir "$DIR_RAW" "$sample"
+        fasterq-dump "$sample" -O "$DIR_RAW" -e $THREADS
+        gzip "$DIR_RAW/${sample}_1.fastq"
+        gzip "$DIR_RAW/${sample}_2.fastq"
+
     done
     mark_step "DOWNLOAD_READS"
+fi
+
+# ==============================================================================
+# STEP 2b: REPAIR PAIRED-END READS
+# ==============================================================================
+if ! check_step "REPAIR_READS"; then
+    log "Repairing paired-end FASTQ files..."
+
+    for sample in "${SAMPLES[@]}"; do
+        repair.sh \
+            in1="$DIR_RAW/${sample}_1.fastq.gz" \
+            in2="$DIR_RAW/${sample}_2.fastq.gz" \
+            out1="$DIR_RAW/${sample}_1.repaired.fastq.gz" \
+            out2="$DIR_RAW/${sample}_2.repaired.fastq.gz" \
+            outs="$DIR_RAW/${sample}_singletons.fastq.gz"
+    done
+
+    mark_step "REPAIR_READS"
 fi
 
 # ==============================================================================
@@ -117,8 +150,9 @@ if ! check_step "ALIGNMENT"; then
     for sample in "${SAMPLES[@]}"; do
         log "Aligning $sample to reference..."
         
-        R1="$DIR_RAW/${sample}_1.fastq.gz"
-        R2="$DIR_RAW/${sample}_2.fastq.gz"
+        R1="$DIR_RAW/${sample}_1.repaired.fastq.gz"
+        R2="$DIR_RAW/${sample}_2.repaired.fastq.gz"
+
         
         # Helper variables for Read Group (RG) needed for variant calling
         # ID=Sample, SM=SampleName, PL=Illumina
@@ -155,17 +189,54 @@ if ! check_step "VARIANT_CALLING"; then
 fi
 
 # ==============================================================================
+# STEP 5b: BUILD CUSTOM SNPEFF DATABASE (HSV-1)
+# ==============================================================================
+if ! check_step "BUILD_SNPEFF_DB"; then
+    log "Building custom SnpEff database for HSV-1..."
+
+    # 1. Locate the default config in Conda safely
+    DEFAULT_CONFIG=$(find "$CONDA_PREFIX" -name snpEff.config | head -n 1)
+    
+    if [ -z "$DEFAULT_CONFIG" ]; then
+        log "Error: Could not find snpEff.config in $CONDA_PREFIX"
+        exit 1
+    fi
+
+    # 2. Copy config to current directory (Local Config)
+    cp "$DEFAULT_CONFIG" ./snpEff.config
+    
+    # 3. Configure 'data.dir' to point to a local folder './data'
+    sed -i 's|^data.dir = .*|data.dir = ./data|' ./snpEff.config
+
+    # 4. Add the Genome Entry (only if not already there to prevent duplicates)
+    if ! grep -q "$SNPEFF_DB.genome" ./snpEff.config; then
+        echo -e "\n# Custom Genome: HSV-1" >> ./snpEff.config
+        echo -e "$SNPEFF_DB.genome : Human herpes simplex virus 1 (strain 17)" >> ./snpEff.config
+    fi
+
+    # 5. Prepare Data Directories
+    mkdir -p "./data/$SNPEFF_DB"
+
+    # Copy Reference and GFF to the expected location
+    cp "$DIR_REF/${REF_NAME}.fna" "./data/$SNPEFF_DB/sequences.fa"
+    cp "$DIR_REF/${REF_NAME}.gff" "./data/$SNPEFF_DB/genes.gff"
+
+    # 6. Build Database using the LOCAL config
+    # ADDED FLAGS: -noCheckCds -noCheckProtein (Fixes the "File not found" error)
+    snpEff build -c ./snpEff.config -gff3 -noCheckCds -noCheckProtein -v "$SNPEFF_DB"
+
+    mark_step "BUILD_SNPEFF_DB"
+fi
+
+# ==============================================================================
 # STEP 6: VARIANT ANNOTATION (SnpEff)
 # ==============================================================================
 if ! check_step "ANNOTATION"; then
-    log "Downloading SnpEff database for $SNPEFF_DB..."
-    # Only download if not already present in snpEff config
-    snpEff download -v "$SNPEFF_DB"
-    
     log "Annotating Variants..."
-    # Output as VCF for readability and downstream filtering
+    
+    # Note the addition of '-c ./snpEff.config'
     bcftools view "$DIR_VARIANTS/joint_variants.bcf" | \
-    snpEff eff -v "$SNPEFF_DB" - > "$DIR_VARIANTS/annotated_variants.vcf"
+    snpEff eff -c ./snpEff.config -v "$SNPEFF_DB" - > "$DIR_VARIANTS/annotated_variants.vcf"
     
     # Compress and index the VCF for bcftools operations
     bgzip -f "$DIR_VARIANTS/annotated_variants.vcf"
@@ -180,24 +251,45 @@ fi
 if ! check_step "ANALYSIS"; then
     log "Filtering for Missense Variants and Comparing Strains..."
     
+    # 1. Locate SnpSift.jar dynamically (Searching both uppercase and lowercase variants)
+    # We search in $CONDA_PREFIX/share to find the jar within the snpeff installation
+    SNPSIFT_JAR=$(find "$CONDA_PREFIX/share" -iname "SnpSift.jar" | head -n 1)
+
+    if [ -z "$SNPSIFT_JAR" ]; then
+        log "Error: SnpSift.jar not found. Attempting to locate via snpSift wrapper..."
+        # Some conda versions use a wrapper script; we try to find the jar relative to it
+        SNPSIFT_PATH=$(which snpSift 2>/dev/null || which SnpSift 2>/dev/null)
+        if [ -n "$SNPSIFT_PATH" ]; then
+             # Extract directory and look for the jar
+             SNPSIFT_JAR=$(dirname $(readlink -f "$SNPSIFT_PATH"))/SnpSift.jar
+        fi
+    fi
+
+    if [ ! -f "$SNPSIFT_JAR" ]; then
+        log "Critical Error: Could not find SnpSift.jar. Please ensure 'snpeff' is installed."
+        exit 1
+    fi
+    log "Found SnpSift jar at: $SNPSIFT_JAR"
+
     INPUT_VCF="$DIR_VARIANTS/annotated_variants.vcf.gz"
     
-    # 1. Extract only Missense variants using SnpSift filter
+    # 2. Extract only Missense variants using SnpSift filter
     # "ANN" is the annotation field added by SnpEff
-    cat "$INPUT_VCF" | java -jar $(which SnpSift.jar) filter "ANN[*].EFFECT has 'missense_variant'" \
+    # Note: We now use "$SNPSIFT_JAR" variable instead of $(which...)
+    cat "$INPUT_VCF" | java -jar "$SNPSIFT_JAR" filter "ANN[*].EFFECT has 'missense_variant'" \
     > "$DIR_RESULTS/all_missense.vcf"
     
     bgzip -f "$DIR_RESULTS/all_missense.vcf"
     tabix -p vcf "$DIR_RESULTS/all_missense.vcf.gz"
     
-    # 2. Split the joint VCF into individual VCFs to use 'bcftools isec'
+    # 3. Split the joint VCF into individual VCFs to use 'bcftools isec'
     bcftools view -s "$STRAIN_1_ID" "$DIR_RESULTS/all_missense.vcf.gz" -Oz -o "$DIR_RESULTS/${STRAIN_1_ID}_missense.vcf.gz"
     bcftools view -s "$STRAIN_2_ID" "$DIR_RESULTS/all_missense.vcf.gz" -Oz -o "$DIR_RESULTS/${STRAIN_2_ID}_missense.vcf.gz"
     
     tabix -p vcf "$DIR_RESULTS/${STRAIN_1_ID}_missense.vcf.gz"
     tabix -p vcf "$DIR_RESULTS/${STRAIN_2_ID}_missense.vcf.gz"
     
-    # 3. Find Intersection and Complements (Unique/Shared)
+    # 4. Find Intersection and Complements (Unique/Shared)
     # -p: prefix for output directory
     # -n=2: take inputs with 2 files
     log "Calculating intersections..."
@@ -206,10 +298,11 @@ if ! check_step "ANALYSIS"; then
         "$DIR_RESULTS/${STRAIN_2_ID}_missense.vcf.gz"
         
     # Rename outputs for clarity (bcftools outputs 0000.vcf, 0001.vcf, etc.)
+    # 0000 = Unique to File 1, 0001 = Unique to File 2, 0002 = Shared
     mv "$DIR_RESULTS/comparison/0000.vcf" "$DIR_RESULTS/${STRAIN_1_ID}_UNIQUE_missense.vcf"
     mv "$DIR_RESULTS/comparison/0001.vcf" "$DIR_RESULTS/${STRAIN_2_ID}_UNIQUE_missense.vcf"
     mv "$DIR_RESULTS/comparison/0002.vcf" "$DIR_RESULTS/SHARED_missense.vcf"
-    rm "$DIR_RESULTS/comparison/0003.vcf" # We don't need the file representing records in neither (should be empty)
+    rm -f "$DIR_RESULTS/comparison/0003.vcf" 
     
     # Generate simple stats
     COUNT_1=$(grep -v "^#" "$DIR_RESULTS/${STRAIN_1_ID}_UNIQUE_missense.vcf" | wc -l)
