@@ -33,7 +33,7 @@ if [ "$HPC_ENV" = true ]; then
     echo "HPC environment detected. Using scratch storage..."
     BASE_DIR="${SLURM_TMPDIR:-/tmp}/hsv1_pipeline"
 fi
-
+mkdir -p "$BASE_DIR"
 DIR_REF="$BASE_DIR/1_reference"
 DIR_RAW="$BASE_DIR/2_raw_reads"
 DIR_QC="$BASE_DIR/3_qc_reports"
@@ -45,18 +45,7 @@ CHECKPOINT_FILE="$BASE_DIR/.checkpoint"
 mkdir -p $DIR_REF $DIR_RAW $DIR_QC $DIR_ALIGN $DIR_VARIANTS $DIR_RESULTS
 touch "$CHECKPOINT_FILE"
 
-# --- 3. LOAD MODULES OR ACTIVATE CONDA ---
-if [ "$HPC_ENV" = true ]; then
-    echo "Loading HPC modules..."
-    module load anaconda
-    source activate variant_analysis_env
-else
-    echo "Activating local Conda environment..."
-    source "$HOME/miniconda3/etc/profile.d/conda.sh"
-    conda activate variant_analysis_env
-fi
-
-# --- 4. ERROR HANDLING & LOGGING ---
+# --- 3. ERROR HANDLING & LOGGING ---
 set -e
 set -o pipefail
 
