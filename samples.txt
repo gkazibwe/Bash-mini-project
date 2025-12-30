@@ -1,2 +1,11 @@
-SRR1770413
-SRR1770414
+Human herpesvirus 1 strain 17, complete genome
+NCBI Reference Sequence: NC_001806.2
+
+RefSeq link: https://ftp.ncbi.nlm.nih.gov/genomes/all/GCF/000/859/985/GCF_000859985.2_ViralProj15217/GCF_000859985.2_ViralProj15217_genomic.fna.gz
+
+Strain 1 Human alphaherpesvirus 1 (SRR36143512):
+SRR36143512
+
+Strain 2 WGS of HSV-1: Vero cell culture sample (SRR23265797):
+SRR23265797
+
