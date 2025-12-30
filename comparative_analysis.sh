@@ -7,7 +7,7 @@
 #              shared/unique missense SNP analysis.
 #
 # AUTHORS:
-#   1. KAZIBWE GEORGE <gkazibwe@gmail.com>
+#   1. KAZIBWE GEORGE 2025/HD07/25965U <gkazibwe@gmail.com>
 #   2. WASSWA CHARLES LWANGA <wasswacharleslwanga4@gmail.com>
 #   3. DDUMBA FRANCIS SEMAKUBA <frncsddumbasema@gmail.com>
 #
