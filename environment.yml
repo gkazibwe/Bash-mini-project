@@ -13,3 +13,5 @@ dependencies:
   - snpeff           # For variant annotation
   - wget             # For downloading reference files
   - pigz             # For parallel compression (speeds up handling)
+  - bbmap            # For paired-end read synchronization
+  - snpsift          # For filter, manipulate, and annotate genomic functional variants in VCF files
