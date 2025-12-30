@@ -29,3 +29,28 @@ Write a single bash script that automates the comparative variant analysis proce
 - Test your script thoroughly to ensure it works without any errors before the final submission.
 - Strain information file. Provide a text file containing the sample IDs for your two chosen strains
 - Environment.yml file. Provide the configuration file with the name of the conda environment, channels, and all the tools required to run your bash script.
+
+### How to run the script
+1. Install Conda: Ensure you have `Miniconda` or `Anaconda` installed.
+2. Create Environment:
+```Bash
+conda env create -f environment.yml
+```
+3. Activate Environment:
+```Bash
+conda activate variant_analysis_env
+```
+4. Clone the repo in the activated environment.
+5. Make Executable (optional):
+```Bash
+chmod +x comparative_analysis.sh
+```
+6. Run:
+```Bash
+./comparative_analysis.sh
+```
+Alternatively:  
+```Bash
+bash comparative_analysis.sh
+```
+
