@@ -42,7 +42,11 @@ conda env create -f environment.yml
 ```Bash
 chmod +x comparative_analysis.sh
 ```
-4. Run:
+4. Activate the environment
+   ```Bash
+   conda activate variant_analysis_env
+   ```
+5. Run:
 ```Bash
 ./comparative_analysis.sh
 ```
@@ -51,23 +55,23 @@ Alternatively:
 bash comparative_analysis.sh
 ```
 
-### How to run the script on an HPC 
+# How to run the script on an HPC 
 1. Log into the HPC
 ```Bash
 ssh your_username@hpc_address
 ```
-# Move to your project directory where the comparative_analysis.sh and environment.yml where placed.
+### Move to your project directory where the comparative_analysis.sh and environment.yml where placed.
 
 2. Create Environment:
-   # load the anaconda module if the hpc uses modules 
+   ### load the anaconda module if the hpc uses modules 
    ```Bash
    module load anaconda
    ```
-   # Then acitivate conda
+   ### Then acitivate conda
    ```Bash
    source $HOME/miniconda3/etc/profile.d/conda.sh
    ```
-   # Then run this command from the directory where the environment.yml file has been put 
+   ### Then run this command from the directory where the environment.yml file has been put 
 ```Bash
 conda env create -f environment.yml
 ```
@@ -75,7 +79,11 @@ conda env create -f environment.yml
 ```Bash
 chmod +x comparative_analysis.sh
 ```
-4. Run:
+4. Activate the environment
+   ```Bash
+   conda activate variant_analysis_env
+   ```
+5. Run:
 ```Bash
 sbatch comparative_analysis.sh
 ```
