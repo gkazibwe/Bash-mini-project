@@ -269,20 +269,26 @@ if ! check_step "ANALYSIS"; then
         log "Critical Error: Could not find SnpSift.jar. Please ensure 'snpeff' is installed."
         exit 1
     fi
-    log "Found SnpSift jar at: $SNPSIFT_JAR"
-
+    
     INPUT_VCF="$DIR_VARIANTS/annotated_variants.vcf.gz"
     
     # 2. Extract only Missense variants using SnpSift filter
-    # "ANN" is the annotation field added by SnpEff
-    # Note: We now use "$SNPSIFT_JAR" variable instead of $(which...)
-    cat "$INPUT_VCF" | java -jar "$SNPSIFT_JAR" filter "ANN[*].EFFECT has 'missense_variant'" \
-    > "$DIR_RESULTS/all_missense.vcf"
+    log "Filtering missense variants..."
+    if [ -n "$SNPSIFT_JAR" ]; then
+        zcat "$INPUT_VCF" | java -jar "$SNPSIFT_JAR" filter \
+            "ANN[*].EFFECT has 'missense_variant'" \
+            > "$DIR_RESULTS/all_missense.vcf"
+    else
+        zcat "$INPUT_VCF" | $SNPSIFT_CMD filter \
+            "ANN[*].EFFECT has 'missense_variant'" \
+            > "$DIR_RESULTS/all_missense.vcf"
+    fi
     
     bgzip -f "$DIR_RESULTS/all_missense.vcf"
     tabix -p vcf "$DIR_RESULTS/all_missense.vcf.gz"
     
-    # 3. Split the joint VCF into individual VCFs to use 'bcftools isec'
+    # 3. Split the joint VCF into individual VCFs
+    log "Splitting VCF by sample..."
     bcftools view -s "$STRAIN_1_ID" "$DIR_RESULTS/all_missense.vcf.gz" -Oz -o "$DIR_RESULTS/${STRAIN_1_ID}_missense.vcf.gz"
     bcftools view -s "$STRAIN_2_ID" "$DIR_RESULTS/all_missense.vcf.gz" -Oz -o "$DIR_RESULTS/${STRAIN_2_ID}_missense.vcf.gz"
     
@@ -290,35 +296,94 @@ if ! check_step "ANALYSIS"; then
     tabix -p vcf "$DIR_RESULTS/${STRAIN_2_ID}_missense.vcf.gz"
     
     # 4. Find Intersection and Complements (Unique/Shared)
-    # -p: prefix for output directory
-    # -n=2: take inputs with 2 files
+    # Using -n~11 to find variants in at least one file (creates separate outputs)
     log "Calculating intersections..."
-    bcftools isec -p "$DIR_RESULTS/comparison" -n=2 \
+    bcftools isec -p "$DIR_RESULTS/comparison" \
         "$DIR_RESULTS/${STRAIN_1_ID}_missense.vcf.gz" \
         "$DIR_RESULTS/${STRAIN_2_ID}_missense.vcf.gz"
-        
-    # Rename outputs for clarity (bcftools outputs 0000.vcf, 0001.vcf, etc.)
-    # 0000 = Unique to File 1, 0001 = Unique to File 2, 0002 = Shared
-    mv "$DIR_RESULTS/comparison/0000.vcf" "$DIR_RESULTS/${STRAIN_1_ID}_UNIQUE_missense.vcf"
-    mv "$DIR_RESULTS/comparison/0001.vcf" "$DIR_RESULTS/${STRAIN_2_ID}_UNIQUE_missense.vcf"
-    mv "$DIR_RESULTS/comparison/0002.vcf" "$DIR_RESULTS/SHARED_missense.vcf"
-    rm -f "$DIR_RESULTS/comparison/0003.vcf" 
     
-    # Generate simple stats
-    COUNT_1=$(grep -v "^#" "$DIR_RESULTS/${STRAIN_1_ID}_UNIQUE_missense.vcf" | wc -l)
-    COUNT_2=$(grep -v "^#" "$DIR_RESULTS/${STRAIN_2_ID}_UNIQUE_missense.vcf" | wc -l)
-    COUNT_SHARED=$(grep -v "^#" "$DIR_RESULTS/SHARED_missense.vcf" | wc -l)
+    # bcftools isec output explanation:
+    # 0000.vcf = unique to first file (STRAIN_1)
+    # 0001.vcf = unique to second file (STRAIN_2)
+    # 0002.vcf = shared between both files
+    # 0003.vcf = present in both (alternative representation)
     
-    echo "------------------------------------------------" > "$DIR_RESULTS/Summary_Report.txt"
-    echo "Comparative Analysis Report" >> "$DIR_RESULTS/Summary_Report.txt"
-    echo "Strain 1: $STRAIN_1_ID" >> "$DIR_RESULTS/Summary_Report.txt"
-    echo "Strain 2: $STRAIN_2_ID" >> "$DIR_RESULTS/Summary_Report.txt"
+    # Check which files were created
+    log "Checking generated comparison files..."
+    ls -lh "$DIR_RESULTS/comparison/"
+    
+    # Safely rename outputs (check if files exist first)
+    if [ -f "$DIR_RESULTS/comparison/0000.vcf" ]; then
+        mv "$DIR_RESULTS/comparison/0000.vcf" "$DIR_RESULTS/${STRAIN_1_ID}_UNIQUE_missense.vcf"
+        log "Created: ${STRAIN_1_ID}_UNIQUE_missense.vcf"
+    else
+        touch "$DIR_RESULTS/${STRAIN_1_ID}_UNIQUE_missense.vcf"
+        log "Warning: No unique variants found for $STRAIN_1_ID"
+    fi
+    
+    if [ -f "$DIR_RESULTS/comparison/0001.vcf" ]; then
+        mv "$DIR_RESULTS/comparison/0001.vcf" "$DIR_RESULTS/${STRAIN_2_ID}_UNIQUE_missense.vcf"
+        log "Created: ${STRAIN_2_ID}_UNIQUE_missense.vcf"
+    else
+        touch "$DIR_RESULTS/${STRAIN_2_ID}_UNIQUE_missense.vcf"
+        log "Warning: No unique variants found for $STRAIN_2_ID"
+    fi
+    
+    if [ -f "$DIR_RESULTS/comparison/0002.vcf" ]; then
+        mv "$DIR_RESULTS/comparison/0002.vcf" "$DIR_RESULTS/SHARED_missense.vcf"
+        log "Created: SHARED_missense.vcf"
+    elif [ -f "$DIR_RESULTS/comparison/0003.vcf" ]; then
+        mv "$DIR_RESULTS/comparison/0003.vcf" "$DIR_RESULTS/SHARED_missense.vcf"
+        log "Created: SHARED_missense.vcf (from 0003)"
+    else
+        touch "$DIR_RESULTS/SHARED_missense.vcf"
+        log "Warning: No shared variants found between strains"
+    fi
+    
+    # Clean up any remaining files
+    rm -f "$DIR_RESULTS/comparison/"*.vcf
+    
+    # Generate statistics
+    COUNT_1=$(grep -v "^#" "$DIR_RESULTS/${STRAIN_1_ID}_UNIQUE_missense.vcf" 2>/dev/null | wc -l || echo "0")
+    COUNT_2=$(grep -v "^#" "$DIR_RESULTS/${STRAIN_2_ID}_UNIQUE_missense.vcf" 2>/dev/null | wc -l || echo "0")
+    COUNT_SHARED=$(grep -v "^#" "$DIR_RESULTS/SHARED_missense.vcf" 2>/dev/null | wc -l || echo "0")
+    
+    # Get total missense count
+    COUNT_TOTAL=$(zcat "$DIR_RESULTS/all_missense.vcf.gz" 2>/dev/null | grep -v "^#" | wc -l || echo "0")
+    
+    # Create summary report
+    echo "================================================" > "$DIR_RESULTS/Summary_Report.txt"
+    echo "    Comparative Missense Variant Analysis" >> "$DIR_RESULTS/Summary_Report.txt"
+    echo "================================================" >> "$DIR_RESULTS/Summary_Report.txt"
+    echo "" >> "$DIR_RESULTS/Summary_Report.txt"
+    echo "Analysis Date: $(date +'%Y-%m-%d %H:%M:%S')" >> "$DIR_RESULTS/Summary_Report.txt"
+    echo "" >> "$DIR_RESULTS/Summary_Report.txt"
+    echo "Strains Compared:" >> "$DIR_RESULTS/Summary_Report.txt"
+    echo "  - Strain 1: $STRAIN_1_ID" >> "$DIR_RESULTS/Summary_Report.txt"
+    echo "  - Strain 2: $STRAIN_2_ID" >> "$DIR_RESULTS/Summary_Report.txt"
+    echo "" >> "$DIR_RESULTS/Summary_Report.txt"
     echo "------------------------------------------------" >> "$DIR_RESULTS/Summary_Report.txt"
-    echo "Unique Missense SNPs in $STRAIN_1_ID: $COUNT_1" >> "$DIR_RESULTS/Summary_Report.txt"
-    echo "Unique Missense SNPs in $STRAIN_2_ID: $COUNT_2" >> "$DIR_RESULTS/Summary_Report.txt"
-    echo "Shared Missense SNPs: $COUNT_SHARED" >> "$DIR_RESULTS/Summary_Report.txt"
+    echo "Results:" >> "$DIR_RESULTS/Summary_Report.txt"
+    echo "------------------------------------------------" >> "$DIR_RESULTS/Summary_Report.txt"
+    echo "Total Missense Variants Detected: $COUNT_TOTAL" >> "$DIR_RESULTS/Summary_Report.txt"
+    echo "" >> "$DIR_RESULTS/Summary_Report.txt"
+    echo "Unique to $STRAIN_1_ID: $COUNT_1" >> "$DIR_RESULTS/Summary_Report.txt"
+    echo "Unique to $STRAIN_2_ID: $COUNT_2" >> "$DIR_RESULTS/Summary_Report.txt"
+    echo "Shared between both strains: $COUNT_SHARED" >> "$DIR_RESULTS/Summary_Report.txt"
+    echo "" >> "$DIR_RESULTS/Summary_Report.txt"
+    echo "================================================" >> "$DIR_RESULTS/Summary_Report.txt"
     
-    log "Analysis Complete. Check $DIR_RESULTS/Summary_Report.txt"
+    # Display results to console
+    log "=========================================="
+    log "Analysis Complete!"
+    log "=========================================="
+    log "Total Missense Variants: $COUNT_TOTAL"
+    log "Unique to $STRAIN_1_ID: $COUNT_1"
+    log "Unique to $STRAIN_2_ID: $COUNT_2"
+    log "Shared: $COUNT_SHARED"
+    log "=========================================="
+    log "Full report saved to: $DIR_RESULTS/Summary_Report.txt"
+    
     mark_step "ANALYSIS"
 fi
 
