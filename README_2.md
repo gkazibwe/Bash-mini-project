@@ -30,11 +30,11 @@ Write a single bash script that automates the comparative variant analysis proce
 - Strain information file. Provide a text file containing the sample IDs for your two chosen strains
 - Environment.yml file. Provide the configuration file with the name of the conda environment, channels, and all the tools required to run your bash script.
 
-### How to run the script on a local computer 
+# How to run the script on a local computer 
 1. Install Conda: Ensure you have `Miniconda` or `Anaconda` installed.
-   # Move to the directory where the comparative_analysis.sh and environment.yml were downloaded to 
+   ### Move to the directory where the comparative_analysis.sh and environment.yml were downloaded to 
 2. Create Environment:
-   # Run this command from the directory where the environment.yml file has been put 
+   ### Run this command from the directory where the environment.yml file has been put 
 ```Bash
 conda env create -f environment.yml
 ```
@@ -85,13 +85,20 @@ chmod +x comparative_analysis.sh
    ```
 5. Run:
 ```Bash
-sbatch comparative_analysis.sh
+bash comparative_analysis.sh
+```
+# NOTE: The above method on HPC is used for a quick check to see if the script works and if its quick one, its not proper to run from the HPC home directory 
+
+
+# Alternatively on HPC you can use a SLURM file to schecdule the job to a node
+
+#Run this command
+
+### This command should be run from the directory where both the run_variant_calling.sbatch and comparative_analysis.sh is present 
+```Bash
+sbatch run_variant_calling.sbatch
 ```
 Check for the job status:  
 ```Bash
 squeue -u $USER
-```
-View output:
-```Bash
-cat slurm-12345.out
 ```
