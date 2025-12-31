@@ -2,11 +2,13 @@
 # ==============================================================================
 # SCRIPT: comparative_analysis.sh
 # DESCRIPTION: Comparative variant analysis pipeline between two HSV-1 strains
+#	       Includes Download, QC, Alignment, Variant Calling, Annotation, and
+#              shared/unique missense SNP analysis.
 #              Hybrid version: runs both on HPC and local computers
 # AUTHORS:
-#   1. KAZIBWE GEORGE
-#   2. WASSWA CHARLES LWANGA
-#   3. DDUMBA FRANCIS SEMAKUBA
+#   1. KAZIBWE GEORGE 2025/HD07/25965U <gkazibwe@gmail.com>
+#   2. WASSWA CHARLES LWANGA 2025/HD07/26027U <wasswacharleslwanga4@gmail.com>
+#   3. DDUMBA FRANCIS SEMAKUBA 2025/HD07/25984U <frncsddumbasema@gmail.com>
 # ==============================================================================
 
 # --- 0. ENVIRONMENT DETECTION ---
@@ -16,13 +18,15 @@ if [ -n "$SLURM_JOB_ID" ] || [ -n "$PBS_JOBID" ]; then
 fi
 
 # --- 1. CONFIGURATION VARIABLES ---
-STRAIN_1_ID="SRR36143512"
-STRAIN_2_ID="SRR23265797"
+# Sample Accessions (SRA Run IDs)
+STRAIN_1_ID="SRR36143512" # Herpes simplex first Strain
+STRAIN_2_ID="SRR23265797" # Herpes simplex second Strain
 SAMPLES=($STRAIN_1_ID $STRAIN_2_ID)
 
+# Reference Genome (Human herpesvirus 1 strain 17)
 REF_URL="https://ftp.ncbi.nlm.nih.gov/genomes/all/GCF/000/859/985/GCF_000859985.2_ViralProj15217/GCF_000859985.2_ViralProj15217_genomic.fna.gz"
 REF_NAME="Human_herpesvirus_1_strain_17"
-SNPEFF_DB="HSV1_strain17"
+SNPEFF_DB="HSV1_strain17" # Database name for snpEff
 
 THREADS=8
 JAVA_MEM="16g"  # Java memory for snpEff/SnpSift
@@ -42,10 +46,13 @@ DIR_VARIANTS="$BASE_DIR/5_variants"
 DIR_RESULTS="$BASE_DIR/6_final_results"
 CHECKPOINT_FILE="$BASE_DIR/.checkpoint"
 
+# Create Directories
 mkdir -p $DIR_REF $DIR_RAW $DIR_QC $DIR_ALIGN $DIR_VARIANTS $DIR_RESULTS
 touch "$CHECKPOINT_FILE"
 
 # --- 3. ERROR HANDLING & LOGGING ---
+
+# Exit immediately if a command exits with a non-zero status
 set -e
 set -o pipefail
 
@@ -67,7 +74,7 @@ if ! check_step "DOWNLOAD_REF"; then
 fi
 
 # ==============================================================================
-# STEP 1b: DOWNLOAD GFF
+# STEP 1b: DOWNLOAD GENE ANNOTATION (GFF)
 # ==============================================================================
 if ! check_step "DOWNLOAD_GFF"; then
     log "Downloading HSV-1 gene annotation (GFF)..."
