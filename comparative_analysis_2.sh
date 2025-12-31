@@ -77,7 +77,7 @@ log "Comparing $STRAIN_1_ID vs $STRAIN_2_ID"
 # ==============================================================================
 if ! check_step "DOWNLOAD_REF"; then
     log "Downloading Reference Genome..."
-    wget -O "$DIR_REF/${REF_NAME}.fna.gz" "$REF_URL"
+    wget --no-check-certificate -O "$DIR_REF/${REF_NAME}.fna.gz" "$REF_URL"
     gunzip -f "$DIR_REF/${REF_NAME}.fna"
     mark_step "DOWNLOAD_REF"
 fi
@@ -87,7 +87,7 @@ fi
 # ==============================================================================
 if ! check_step "DOWNLOAD_GFF"; then
     log "Downloading HSV-1 gene annotation (GFF)..."
-    wget -O "$DIR_REF/${REF_NAME}.gff.gz" \
+    wget --no-check-certificate -O "$DIR_REF/${REF_NAME}.gff.gz" \
         "https://ftp.ncbi.nlm.nih.gov/genomes/all/GCF/000/859/985/GCF_000859985.2_ViralProj15217/GCF_000859985.2_ViralProj15217_genomic.gff.gz"
     gunzip -f "$DIR_REF/${REF_NAME}.gff.gz"
     mark_step "DOWNLOAD_GFF"
