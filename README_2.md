@@ -67,11 +67,7 @@ ssh your_username@hpc_address
    ```Bash
    module load anaconda
    ```
-   ### Then acitivate conda
-   ```Bash
-   source $HOME/miniconda3/etc/profile.d/conda.sh
-   ```
-   ### Then run this command from the directory where the environment.yml file has been put 
+   ### Then run this command from the directory where the environment.yml file has been put to create an environment with the required tools 
 ```Bash
 conda env create -f environment.yml
 ```
