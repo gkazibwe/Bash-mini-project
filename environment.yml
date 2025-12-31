@@ -4,6 +4,7 @@ channels:
   - conda-forge
   - defaults
 dependencies:
+  - python=3.11      # For compatiblity with the multiqc especially on the HPC 
   - sra-tools        # For downloading FASTQ files (fastq-dump)
   - fastqc           # For quality control
   - multiqc          # For merging QC reports
