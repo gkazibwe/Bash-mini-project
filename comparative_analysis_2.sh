@@ -57,8 +57,17 @@ set -e
 set -o pipefail
 
 log() { echo -e "\n[$(date +'%Y-%m-%d %H:%M:%S')] $1"; }
-check_step() { grep -q "$1" "$CHECKPOINT_FILE" 2>/dev/null && return 0 || return 1; }
-mark_step() { echo "$1" >> "$CHECKPOINT_FILE"; log "Step '$1' completed."; }
+check_step() {
+      local step_name=$1
+     if  grep -q "$step_name" "$CHECKPOINT_FILE" 2>/dev/null; then 
+         log "Step '$step_name' already completed. Skipping."
+         return 0 # True, step exists
+     else
+         return 1 #False, step needs running
+     fi
+ }
+
+mark_step() { echo "$1" >> "$CHECKPOINT_FILE"; log "Step '$1' completed successfully."; }
 
 log "Starting Comparative Analysis Pipeline..."
 log "Comparing $STRAIN_1_ID vs $STRAIN_2_ID"
