@@ -9,4 +9,4 @@
 module purge
 
 # Run pipeline INSIDE the environment (NO activation needed)
-conda run -n variant_analysis_env bash variant_calling1.sh
+conda run -n variant_analysis_env bash comparative_analysis.sh
